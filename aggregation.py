@@ -18,6 +18,13 @@ single entry point called from the notebook.
 from __future__ import annotations
 
 import torch
+import torch.nn.functional as F
+
+# --- THERMAL MANAGEMENT ---
+# Limit CPU threads to prevent the CPU from reaching 100°C during extraction.
+# This will keep temperatures stable without significantly impacting total time.
+if torch.get_num_threads() > 4:
+    torch.set_num_threads(4)
 
 
 def aggregate(
@@ -42,17 +49,18 @@ def aggregate(
         token pooling (mean, max, weighted), or multi-layer fusion strategies.
     """
     # ------------------------------------------------------------------
-    # STUDENT: Replace or extend the aggregation below.
+    # Last-token extraction from layers spanning the model's depth.
+    # The last token carries the strongest hallucination signal as it
+    # reflects the model's final commitment to its answer.
     # ------------------------------------------------------------------
 
-    # Default: last real token of the final transformer layer.
-    layer = hidden_states[-1]          # (seq_len, hidden_dim)
+    real_positions = attention_mask.nonzero(as_tuple=False)
+    last_pos = int(real_positions[-1].item())
 
-    # Find the index of the last real (non-padding) token.
-    real_positions = attention_mask.nonzero(as_tuple=False)  # (n_real, 1)
-    last_pos = int(real_positions[-1].item())                 # scalar index
-
-    feature = layer[last_pos]          # (hidden_dim,)
+    # Embedding (0), Early (6), Mid (12), Late (18), Final (24)
+    layer_indices = [0, 6, 12, 18, 24]
+    layers_to_pool = hidden_states[layer_indices, last_pos, :]  # (5, hidden_dim)
+    feature = layers_to_pool.flatten()                          # (5 * hidden_dim,)
 
     return feature
     # ------------------------------------------------------------------
@@ -82,11 +90,52 @@ def extract_geometric_features(
         sequence length.
     """
     # ------------------------------------------------------------------
-    # STUDENT: Replace or extend the geometric feature extraction below.
+    # Topological & Geometric Feature Extraction
+    # We treat the transformer's layer stack as a discrete trajectory
+    # through representation space and compute geometric invariants.
     # ------------------------------------------------------------------
 
-    # Placeholder: returns an empty tensor (no geometric features).
-    return torch.zeros(0)
+    n_layers = hidden_states.shape[0]  # typically 25 (embedding + 24 layers)
+    mask = attention_mask.bool()
+
+    # 1. Layer-wise L2 norms of mean-pooled representations
+    #    ("magnitude trajectory" — how the activation scale evolves)
+    norms = []
+    mean_pooled = []
+    for li in range(n_layers):
+        mp = hidden_states[li][mask].mean(dim=0)  # (hidden_dim,)
+        mean_pooled.append(mp)
+        norms.append(torch.norm(mp, p=2))
+    norms_tensor = torch.stack(norms)  # (n_layers,)
+
+    # 2. Consecutive cosine similarities ("representation drift")
+    #    Measures angular change between adjacent layers
+    drifts = []
+    for i in range(n_layers - 1):
+        sim = F.cosine_similarity(mean_pooled[i].unsqueeze(0),
+                                  mean_pooled[i + 1].unsqueeze(0))[0]
+        drifts.append(sim)
+    drifts_tensor = torch.stack(drifts)  # (n_layers - 1,)
+
+    # 3. Activation variance per layer ("confidence trajectory")
+    variances = []
+    for li in range(n_layers):
+        variances.append(torch.var(mean_pooled[li]))
+    variances_tensor = torch.stack(variances)  # (n_layers,)
+
+    # 4. Summary statistics of the trajectories themselves
+    #    These are second-order topological features.
+    trajectory_stats = torch.tensor([
+        norms_tensor.mean(),
+        norms_tensor.std(),
+        drifts_tensor.mean(),
+        drifts_tensor.std(),
+        drifts_tensor.min(),       # minimum drift = most stable transition
+        variances_tensor.mean(),
+        variances_tensor.std(),
+    ])
+
+    return torch.cat([norms_tensor, drifts_tensor, variances_tensor, trajectory_stats], dim=0)
 
 
 def aggregation_and_feature_extraction(
@@ -113,6 +162,7 @@ def aggregation_and_feature_extraction(
         ``feature_dim = hidden_dim`` (or larger for multi-layer or geometric
         concatenations).
     """
+    use_geometric = True # override to always extract geometric features
     agg_features = aggregate(hidden_states, attention_mask)  # (feature_dim,)
 
     if use_geometric:

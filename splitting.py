@@ -51,20 +51,19 @@ def split_data(
         function returns the list described above.
     """
 
-    idx = np.arange(len(y))
+    from sklearn.model_selection import StratifiedKFold, train_test_split
 
-    idx_train_val, idx_test = train_test_split(
-        idx,
-        test_size=test_size,
-        random_state=random_state,
-        stratify=y,
-    )
-    relative_val = val_size / (1.0 - test_size)
-    idx_train, idx_val = train_test_split(
-        idx_train_val,
-        test_size=relative_val,
-        random_state=random_state,
-        stratify=y[idx_train_val],
-    )
-    return [(idx_train, idx_val, idx_test)]
+    kfold = StratifiedKFold(n_splits=5, shuffle=True, random_state=random_state)
+    splits = []
+    
+    for train_val_idx, test_idx in kfold.split(np.zeros(len(y)), y):
+        idx_train, idx_val = train_test_split(
+            train_val_idx,
+            test_size=val_size / (1.0 - (1.0 / 5.0)), # effectively ~15% of total dataset
+            random_state=random_state,
+            stratify=y[train_val_idx]
+        )
+        splits.append((idx_train, idx_val, test_idx))
+        
+    return splits
 
