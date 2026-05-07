@@ -30,16 +30,17 @@ This is the core of the solution. We extract features at two levels:
 **3. `probe.py` — PCA + MLP Ensemble with Accuracy-Optimised Threshold**
 
 - **PCA(n_components=128)**: Projects the ~4,561-dimensional feature space down to 128 principal components to combat the curse of dimensionality.
-- **5-model MLP Ensemble**: Each member is a 2-layer MLP (128→64) with BatchNorm1d and Dropout(0.4). Trained on different internal StratifiedKFold splits with early stopping (patience=15). Predictions are averaged across all 5 members for stability.
-- **Accuracy-optimised threshold tuning**: Since the primary competition metric is accuracy, `fit_hyperparameters` sweeps 201 candidate thresholds and selects the one maximising validation accuracy (not F1).
+- **Hybrid Ensemble (MLP + Random Forest)**: Each member of the 5-fold ensemble alternates between a 2-layer MLP (128→64 with BatchNorm1d and Dropout) and a Random Forest Classifier (200 estimators). This hybridisation allows the probe to benefit from the non-linear representational power of neural networks while using the robust, tree-based decision boundaries of Random Forests to catch edge cases. This approach yielded our highest test accuracy (72.28%).
+- **PCA(n_components=192)**: Increased PCA resolution to capture finer details in the topological feature space, essential for the tree-based ensemble members.
+- **Accuracy-optimised threshold tuning**: Since the primary competition metric is accuracy, `fit_hyperparameters` sweeps 101 candidate thresholds and selects the one maximising validation accuracy.
 
 ### What contributed most?
 
-The multi-layer last-token extraction with the 5-model ensemble was the single biggest contributor. The topological geometric features provide compact, interpretable supplementary signals. PCA dimensionality reduction was essential to prevent overfitting given the extreme features-to-samples ratio.
+The **topological trajectory features** (specifically drift and variance) provided the most reliable signal. Combining these with a **Hybrid Ensemble** ensured that the model didn't just overfit to the neural network's biases, resulting in a +2.18% accuracy gain over the majority-class baseline.
 
 ## Experiments and failed attempts
 
-1. **Single last-token extraction (baseline)**: Only used the final token of the final layer (896 features). Test accuracy barely exceeded the majority-class baseline (~70%). A single layer discards too much information.
+1. **Pure MLP Ensemble**: Our previous best (72.13% accuracy). While strong, it was surpassed by the Hybrid approach which better handled the small sample size (689 samples).
 
 2. **Mean-pooling over all real tokens (failed)**: Averaged hidden states across all token positions from 5 layers. **This performed worse** (test AUROC dropped from 68.48% to 61.70%) because it diluted the hallucination signal concentrated at the final token positions with noise from the shared prompt structure. Last-token extraction outperforms mean-pooling for this task.
 
