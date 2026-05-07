@@ -1,0 +1,31 @@
+{
+  "checkpoint": "final_submission_hybrid",
+  "metrics": {
+    "majority_class_baseline": {
+      "accuracy": 0.7010,
+      "f1": 0.8242
+    },
+    "probe_train": {
+      "accuracy": 0.9106,
+      "f1": 0.9415,
+      "auroc": 1.0000
+    },
+    "probe_val": {
+      "accuracy": 0.7481,
+      "f1": 0.8446,
+      "auroc": 0.6905
+    },
+    "probe_test": {
+      "accuracy": 0.7228,
+      "f1": 0.8312,
+      "auroc": 0.6759
+    }
+  },
+  "metadata": {
+    "feature_dim": 4561,
+    "total_samples": 689,
+    "folds": 5,
+    "device": "cuda",
+    "extract_time": 151.8
+  }
+}
