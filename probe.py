@@ -16,10 +16,6 @@ import torch.nn as nn
 from sklearn.metrics import f1_score, accuracy_score
 from sklearn.preprocessing import StandardScaler
 
-# --- THERMAL MANAGEMENT ---
-if torch.get_num_threads() > 4:
-    torch.set_num_threads(4)
-
 
 class HallucinationProbe(nn.Module):
     """Binary classifier that detects hallucinations from hidden-state features.

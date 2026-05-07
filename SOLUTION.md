@@ -6,7 +6,6 @@
 3. Run the solution: `python solution.py`
 4. This will produce `results.json` and `predictions.csv` in the root directory.
 5. All random seeds are fixed to `42` across PyTorch, NumPy, Python's `random` module, scikit-learn's PCA, and StratifiedKFold for full reproducibility.
-6. **Note on CPU temperature**: PyTorch threads are capped at 4 in `aggregation.py` to prevent thermal throttling on consumer hardware.
 
 ## Final solution description
 

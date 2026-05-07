@@ -20,12 +20,6 @@ from __future__ import annotations
 import torch
 import torch.nn.functional as F
 
-# --- THERMAL MANAGEMENT ---
-# Limit CPU threads to prevent the CPU from reaching 100°C during extraction.
-# This will keep temperatures stable without significantly impacting total time.
-if torch.get_num_threads() > 4:
-    torch.set_num_threads(4)
-
 
 def aggregate(
     hidden_states: torch.Tensor,
@@ -133,7 +127,7 @@ def extract_geometric_features(
         drifts_tensor.min(),       # minimum drift = most stable transition
         variances_tensor.mean(),
         variances_tensor.std(),
-    ])
+    ], device=hidden_states.device)
 
     return torch.cat([norms_tensor, drifts_tensor, variances_tensor, trajectory_stats], dim=0)
 
